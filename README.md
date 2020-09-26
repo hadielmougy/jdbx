@@ -58,7 +58,7 @@ Example:
 
 ```java
 
-import ch.digitalfondue.npjt.ConstructorAnnotationRowMapper.Column;
+import io.github.jdbx.ConstructorAnnotationRowMapper.Column;
 
 public static class Conf {
 
@@ -92,8 +92,8 @@ A basic "query repository" will be similar to (using the Conf class defined befo
 ```java
 
 import java.util.List;
-import ch.digitalfondue.npjt.Bind;
-import ch.digitalfondue.npjt.Query;
+import io.github.jdbx.Bind;
+import io.github.jdbx.Query;
 
 public interface MySimpleQueries {
 
@@ -140,9 +140,9 @@ For example:
 
 ```java
 
-import ch.digitalfondue.npjt.Query;
-import ch.digitalfondue.npjt.QueryOverride;
-import ch.digitalfondue.npjt.QueriesOverride;
+import io.github.jdbx.Query;
+import io.github.jdbx.QueryOverride;
+import io.github.jdbx.QueriesOverride;
 
 public interface QueryTest {
   @Query("SELECT * FROM LA_CONF")
