@@ -30,11 +30,13 @@ import org.springframework.util.NumberUtils;
 import org.springframework.util.StringUtils;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 /**
  * Query Type:
@@ -287,6 +289,91 @@ public enum QueryType {
                 if (!hasAccepted) {
                     throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + arg + " with class " + parameterType);
                 }
+            } else {
+
+                if (args.length > 1) {
+                    throw new IllegalStateException(String.format("Was not able to apply the given objects parameters to query"));
+                }
+
+                String query = queryTypeAndQuery.query;
+
+                List<String> placeHolders = new LinkedList<>();
+
+                int index = query.indexOf(":");
+
+                while (index < query.length()) {
+                    //skip if the param is ::
+                    if (query.charAt(index + 1) == ':') {
+                        index++;
+                        index = query.indexOf(":", index + 1);
+                        if (index == -1) {
+                            break;
+                        }
+                    }
+                    int cursor = index + 1;
+
+                    while (cursor < query.length()) {
+                        if (Character.isWhitespace(query.charAt(cursor)) || query.charAt(cursor) == ',') {
+                            placeHolders.add(query.substring(index + 1, cursor));
+                            break;
+                        }
+                        cursor++;
+                    }
+
+                    index = query.indexOf(":", cursor);
+                }
+                List<Object> values = new LinkedList<>();
+
+                placeHolders.forEach(param -> {
+
+                    String[] path = null;
+
+                    if (param.indexOf(".") > 0) {
+                        path = param.split(Pattern.quote("."));
+                    } else {
+                        path = new String[]{param};
+                    }
+
+                    Object current = args[0];
+                    for (String s : path) {
+                        Field field = null;
+                        try {
+                            field = current.getClass().getDeclaredField(s);
+                            field.setAccessible(true);
+                        } catch (NoSuchFieldException e) {
+                            e.printStackTrace();
+                        }
+
+
+                        try {
+                            current = field.get(current);
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        }
+
+                    }
+                    values.add(current);
+                });
+
+                parameterTypes = new Class[values.size()];
+
+                boolean hasAccepted = false;
+                for (int j = 0; j < values.size(); j++) {
+                    parameterTypes[j] = values.get(j).getClass();
+                    Class<?> parameterType = parameterTypes[j];
+                    for (ParameterConverter parameterConverter : parameterConverters) {
+                        if (parameterConverter.accept(parameterType, new Annotation[]{})) {
+                            hasAccepted = true;
+                            parameterConverter.processParameter(placeHolders.get(j), values.get(j), parameterType, ps);
+                            break;
+                        }
+                    }
+                }
+
+                if (!hasAccepted) {
+                    throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + args);
+                }
+
             }
         }
 
