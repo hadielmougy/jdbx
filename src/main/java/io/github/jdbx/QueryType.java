@@ -295,89 +295,88 @@ public enum QueryType {
                     throw new IllegalStateException(String.format("Was not able to apply the given objects parameters to query"));
                 }
 
-                String query = queryTypeAndQuery.query;
+                List<String> placeHolders = placeHolders(queryTypeAndQuery.query);
+                List<Object> values = extractValuesFromObject(args[0], placeHolders);
 
-                List<String> placeHolders = new LinkedList<>();
-
-                int index = query.indexOf(":");
-
-                while (index < query.length()) {
-                    //skip if the param is ::
-                    if (query.charAt(index + 1) == ':') {
-                        index++;
-                        index = query.indexOf(":", index + 1);
-                        if (index == -1) {
-                            break;
-                        }
-                    }
-                    int cursor = index + 1;
-
-                    while (cursor < query.length()) {
-                        if (Character.isWhitespace(query.charAt(cursor)) || query.charAt(cursor) == ',') {
-                            placeHolders.add(query.substring(index + 1, cursor));
-                            break;
-                        }
-                        cursor++;
-                    }
-
-                    index = query.indexOf(":", cursor);
-                }
-                List<Object> values = new LinkedList<>();
-
-                placeHolders.forEach(param -> {
-
-                    String[] path = null;
-
-                    if (param.indexOf(".") > 0) {
-                        path = param.split(Pattern.quote("."));
-                    } else {
-                        path = new String[]{param};
-                    }
-
-                    Object current = args[0];
-                    for (String s : path) {
-                        Field field = null;
-                        try {
-                            field = current.getClass().getDeclaredField(s);
-                            field.setAccessible(true);
-                        } catch (NoSuchFieldException e) {
-                            e.printStackTrace();
-                        }
-
-
-                        try {
-                            current = field.get(current);
-                        } catch (IllegalAccessException e) {
-                            e.printStackTrace();
-                        }
-
-                    }
-                    values.add(current);
-                });
-
-                parameterTypes = new Class[values.size()];
-
-                boolean hasAccepted = false;
                 for (int j = 0; j < values.size(); j++) {
-                    parameterTypes[j] = values.get(j).getClass();
-                    Class<?> parameterType = parameterTypes[j];
+                    boolean hasAccepted = false;
+                    Class<?> parameterType = values.get(j).getClass();
                     for (ParameterConverter parameterConverter : parameterConverters) {
-                        if (parameterConverter.accept(parameterType, new Annotation[]{})) {
+                        if (parameterConverter.accept(parameterType, parameterAnnotations[i])) {
                             hasAccepted = true;
                             parameterConverter.processParameter(placeHolders.get(j), values.get(j), parameterType, ps);
                             break;
                         }
                     }
-                }
 
-                if (!hasAccepted) {
-                    throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + args);
+                    if (!hasAccepted) {
+                        throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + args);
+                    }
                 }
 
             }
         }
 
         return ps;
+    }
+
+    private static List<Object> extractValuesFromObject(Object obj, List<String> placeHolders) {
+        List<Object> values = new LinkedList<>();
+        placeHolders.forEach(param -> {
+
+            String[] path = param.split(Pattern.quote("."));
+
+            Object current = obj;
+            for (String s : path) {
+                Field field = null;
+                try {
+                    field = current.getClass().getDeclaredField(s);
+                    field.setAccessible(true);
+                } catch (NoSuchFieldException e) {
+                    e.printStackTrace();
+                }
+
+
+                try {
+                    current = field.get(current);
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+
+            }
+            values.add(current);
+        });
+        return values;
+    }
+
+    private static List<String> placeHolders(String query) {
+        List<String> placeHolders = new LinkedList<>();
+        int index = query.indexOf(":");
+
+        while (index < query.length()) {
+            //skip if the param is ::
+            if (query.charAt(index + 1) == ':') {
+                index++;
+                index = query.indexOf(":", index + 1);
+                if (index == -1) {
+                    break;
+                }
+            }
+            int cursor = index + 1;
+
+            while (cursor < query.length()) {
+                if (Character.isWhitespace(query.charAt(cursor)) ||
+                        query.charAt(cursor) == ',' ||
+                        query.charAt(cursor) == ')') {
+                    placeHolders.add(query.substring(index + 1, cursor));
+                    break;
+                }
+                cursor++;
+            }
+
+            index = query.indexOf(":", cursor);
+        }
+        return placeHolders;
     }
 
     private static String parameterName(Annotation[] annotation) {
