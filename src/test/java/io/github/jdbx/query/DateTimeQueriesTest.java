@@ -41,6 +41,7 @@ public class DateTimeQueriesTest {
         dq.createTable();
 
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
+        Instant iNow = Instant.now();
 
         dq.insertValue("KEY", now);
         check(dq, "KEY", now);
@@ -51,7 +52,6 @@ public class DateTimeQueriesTest {
         dq.insertValue("KEY3", now.toLocalDateTime());
         check(dq, "KEY3", now);
 
-        Instant iNow = Instant.now();
         dq.insertValue("KEY4", iNow);
         Assert.assertEquals(iNow, dq.findInstantByKey("KEY4"));
         Assert.assertEquals(iNow, dq.findConfInstantByKey("KEY4").value);

@@ -268,9 +268,9 @@ public enum QueryType {
         Class<?>[] parameterTypes = m.getParameterTypes();
         for (int i = 0; i < args.length; i++) {
             String name = parameterName(parameterAnnotations[i]);
+            Object arg = args[i];
+            Class<?> parameterType = parameterTypes[i];
             if (name != null) {
-                Object arg = args[i];
-                Class<?> parameterType = parameterTypes[i];
 
                 boolean hasAccepted = false;
                 for (ParameterConverter parameterConverter : parameterConverters) {
@@ -281,7 +281,6 @@ public enum QueryType {
                         } else {
                             parameterConverter.processParameter(name, arg, parameterType, ps);
                         }
-
                         break;
                     }
                 }
@@ -299,18 +298,22 @@ public enum QueryType {
                 List<Object> values = extractValuesFromObject(args[0], placeHolders);
 
                 for (int j = 0; j < values.size(); j++) {
+                    parameterType = values.get(j).getClass();
                     boolean hasAccepted = false;
-                    Class<?> parameterType = values.get(j).getClass();
                     for (ParameterConverter parameterConverter : parameterConverters) {
                         if (parameterConverter.accept(parameterType, parameterAnnotations[i])) {
                             hasAccepted = true;
-                            parameterConverter.processParameter(placeHolders.get(j), values.get(j), parameterType, ps);
+                            if (parameterConverter instanceof ParameterConverter.AdvancedParameterConverter) {
+                                ((ParameterConverter.AdvancedParameterConverter) parameterConverter).processParameter(new ParameterConverter.ProcessParameterContext(jdbc, placeHolders.get(j), values.get(j), parameterType, parameterAnnotations[i], ps));
+                            } else {
+                                parameterConverter.processParameter(placeHolders.get(j), values.get(j), parameterType, ps);
+                            }
                             break;
                         }
                     }
 
                     if (!hasAccepted) {
-                        throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + args);
+                        throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + arg + " with class " + parameterType);
                     }
                 }
 

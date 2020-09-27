@@ -121,7 +121,7 @@ public class CustomJSONQueriesWithCustomQueryFactoryTest {
         }
     }
 
-    @EnableJdbx(queryFactory = CustomQueryFactory.class, basePackages = {"io.github.jdbx.customfactory"})
+    @EnableJdbx(queryFactory = CustomQueryFactory.class, basePackages = {"io.github.jdbx.query.customfactory"})
     public static class CustomQueryFactoryConf {
 
         @Bean
