@@ -271,23 +271,7 @@ public enum QueryType {
             Object arg = args[i];
             Class<?> parameterType = parameterTypes[i];
             if (name != null) {
-
-                boolean hasAccepted = false;
-                for (ParameterConverter parameterConverter : parameterConverters) {
-                    if (parameterConverter.accept(parameterType, parameterAnnotations[i])) {
-                        hasAccepted = true;
-                        if (parameterConverter instanceof ParameterConverter.AdvancedParameterConverter) {
-                            ((ParameterConverter.AdvancedParameterConverter) parameterConverter).processParameter(new ParameterConverter.ProcessParameterContext(jdbc, name, arg, parameterType, parameterAnnotations[i], ps));
-                        } else {
-                            parameterConverter.processParameter(name, arg, parameterType, ps);
-                        }
-                        break;
-                    }
-                }
-
-                if (!hasAccepted) {
-                    throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + arg + " with class " + parameterType);
-                }
+                convert(jdbc, name, arg, parameterType, parameterAnnotations[i], parameterConverters, ps);
             } else {
 
                 if (args.length > 1) {
@@ -298,23 +282,7 @@ public enum QueryType {
                 List<Object> values = extractValuesFromObject(args[0], placeHolders);
 
                 for (int j = 0; j < values.size(); j++) {
-                    parameterType = values.get(j).getClass();
-                    boolean hasAccepted = false;
-                    for (ParameterConverter parameterConverter : parameterConverters) {
-                        if (parameterConverter.accept(parameterType, parameterAnnotations[i])) {
-                            hasAccepted = true;
-                            if (parameterConverter instanceof ParameterConverter.AdvancedParameterConverter) {
-                                ((ParameterConverter.AdvancedParameterConverter) parameterConverter).processParameter(new ParameterConverter.ProcessParameterContext(jdbc, placeHolders.get(j), values.get(j), parameterType, parameterAnnotations[i], ps));
-                            } else {
-                                parameterConverter.processParameter(placeHolders.get(j), values.get(j), parameterType, ps);
-                            }
-                            break;
-                        }
-                    }
-
-                    if (!hasAccepted) {
-                        throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + arg + " with class " + parameterType);
-                    }
+                    convert(jdbc, placeHolders.get(j), values.get(j), values.get(j).getClass(), new Annotation[]{}, parameterConverters, ps);
                 }
 
             }
@@ -323,8 +291,27 @@ public enum QueryType {
         return ps;
     }
 
+    private static void convert(NamedParameterJdbcTemplate jdbc, String name, Object arg, Class<?> parameterType, Annotation[] parameterAnnotations, SortedSet<ParameterConverter> parameterConverters, MapSqlParameterSource ps) {
+        boolean hasAccepted = false;
+        for (ParameterConverter parameterConverter : parameterConverters) {
+            if (parameterConverter.accept(parameterType, parameterAnnotations)) {
+                hasAccepted = true;
+                if (parameterConverter instanceof ParameterConverter.AdvancedParameterConverter) {
+                    ((ParameterConverter.AdvancedParameterConverter) parameterConverter).processParameter(new ParameterConverter.ProcessParameterContext(jdbc, name, arg, parameterType, parameterAnnotations, ps));
+                } else {
+                    parameterConverter.processParameter(name, arg, parameterType, ps);
+                }
+                break;
+            }
+        }
+
+        if (!hasAccepted) {
+            throw new IllegalStateException("Was not able to find a ParameterConverter able to process object: " + arg + " with class " + parameterType);
+        }
+    }
+
     private static List<Object> extractValuesFromObject(Object obj, List<String> placeHolders) {
-        List<Object> values = new LinkedList<>();
+        List<Object> values = new ArrayList<>();
         placeHolders.forEach(param -> {
 
             String[] path = param.split(Pattern.quote("."));
@@ -336,14 +323,14 @@ public enum QueryType {
                     field = current.getClass().getDeclaredField(s);
                     field.setAccessible(true);
                 } catch (NoSuchFieldException e) {
-                    e.printStackTrace();
+                    throw new IllegalStateException("Was not able to find field for " + s, e);
                 }
 
 
                 try {
                     current = field.get(current);
                 } catch (IllegalAccessException e) {
-                    e.printStackTrace();
+                    throw new IllegalStateException("Was not able to get the value for " + param, e);
                 }
 
             }
@@ -353,10 +340,10 @@ public enum QueryType {
     }
 
     private static List<String> placeHolders(String query) {
-        List<String> placeHolders = new LinkedList<>();
+        List<String> placeHolders = new ArrayList<>();
         int index = query.indexOf(":");
 
-        while (index < query.length()) {
+        while (index < query.length() && index != -1) {
             //skip if the param is ::
             if (query.charAt(index + 1) == ':') {
                 index++;
